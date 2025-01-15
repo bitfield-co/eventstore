@@ -3,6 +3,82 @@ defmodule EventStore.Streams.Stream do
 
   alias EventStore.{EventData, RecordedEvent, Storage, UUID}
   alias EventStore.Streams.StreamInfo
+  alias EventStore.Streams.{DomainEvent, StreamQuery}
+
+  def append_to_stream(conn, stream_query, expected_version, events, opts)
+      when is_struct(stream_query) do
+    {serializer, new_opts} = Keyword.pop(opts, :serializer)
+
+    # need one of these per stream
+
+    # StreamInfo
+    #       # stream_uuid: String.t(),
+    #       # stream_id: non_neg_integer() | nil,
+    #       # stream_version: non_neg_integer(),
+    #       # created_at: DateTime.t(),
+    #       # deleted_at: DateTime.t() | nil,
+    #       # status: :created | :deleted | nil
+    #
+    #
+    # %StreamInfo{stream_uuid: stream_uuid, stream_version: stream_version} = stream
+
+    # events = [
+    #   # This event should be linked to 2 streams, student first
+    #   %DomainEvent{
+    #     event: %StudentEnrolled{student_id: 1, course_id: 2},
+    #     stream_uuids: ["student_id", "course_id"]
+    #   },
+    # #  this should be linked to 1 stream, course.
+    #   %DomainEvent{
+    #     event: %CourseLimitReached{course_id: "course_id"},
+    #     stream_uuids: ["course_id"]
+    #   }
+    # ]
+
+
+    #### Do this for the first stream_uuid in each domain event?
+    # %RecordedEvent{
+    #   event_id: event_id || UUID.uuid4(),
+    #   causation_id: causation_id,
+    #   correlation_id: correlation_id,
+    #   event_type: event_type,
+    #   data: serializer.serialize(data),
+    #   metadata: serializer.serialize(metadata),
+    #   created_at: created_at,
+    #   stream_uuid: stream_uuid,
+    #   stream_version: stream_version + index
+    # }
+
+    # Foreach of these include a stream to link to?, we'd also need its stream_version
+
+
+    # transaction(conn, fn ->
+    #   # validate the operation by running the query, and checking that the most recent event is at expected_version
+    #   # prepare the events by wrapping them in RecordedEvent structs
+    #
+    #   prepared_events =
+    #     events
+    #     |> Enum.map(
+    #       &map_to_recorded_event(&1, opts[:created_at_override] || utc_now(), serializer)
+    #     )
+    #     |> Enum.with_index(1)
+    #     |> Enum.map(fn {recorded_event, index} ->
+    #       %RecordedEvent{
+    #         recorded_event
+    #         | stream_uuid: stream_uuid,
+    #           stream_version: stream_version + index
+    #       }
+    #     end)
+    #
+    #   %StreamInfo{stream_id: stream_id} = stream
+    #
+    #   opts = Keyword.put(opts, :expected_version, expected_version)
+    #
+    #   Storage.append_to_stream(conn, stream_id, prepared_events, opts)
+    # end)
+
+    :fixme
+  end
 
   def append_to_stream(conn, stream_uuid, expected_version, events, opts)
       when length(events) < 1000 do
@@ -111,6 +187,15 @@ defmodule EventStore.Streams.Stream do
   def delete(conn, stream_uuid, expected_version, :hard, opts) do
     with {:ok, %StreamInfo{} = stream} <- stream_info(conn, stream_uuid, expected_version, opts) do
       hard_delete_stream(conn, stream, opts)
+    end
+  end
+
+  def stream_info(conn, %StreamQuery{} = query, expected_version, opts) do
+    opts = query_opts(opts)
+
+    with {:ok, stream_info} <- Storage.stream_info(conn, query, opts),
+         :ok <- StreamInfo.validate_expected_version(stream_info, expected_version) do
+      {:ok, stream_info}
     end
   end
 

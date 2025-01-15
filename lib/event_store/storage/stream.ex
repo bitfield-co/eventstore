@@ -4,6 +4,30 @@ defmodule EventStore.Storage.Stream do
   alias EventStore.Page
   alias EventStore.Sql.Statements
   alias EventStore.Streams.StreamInfo
+  alias EventStore.Streams.StreamQuery
+
+  def stream_info(conn, %StreamQuery{} = stream_query, opts) do
+    {schema, opts} = Keyword.pop(opts, :schema)
+
+    query = Statements.query_stream_query(schema, stream_query)
+
+    IO.puts(query)
+
+    stream_uuids = stream_query.stream_ids ++ ["$all"]
+
+    case Postgrex.query(conn, query, stream_uuids, opts) do
+      {:ok, %Postgrex.Result{num_rows: 0}} ->
+        stream_infos = Enum.map(stream_uuids, &StreamInfo.new/1)
+        {:ok, stream_infos}
+
+      {:ok, %Postgrex.Result{rows: rows}} ->
+        stream_infos = Enum.map(rows, &to_stream_info/1)
+        {:ok, stream_infos}
+
+      {:error, _error} = reply ->
+        reply
+    end
+  end
 
   def stream_info(conn, stream_uuid, opts) do
     {schema, opts} = Keyword.pop(opts, :schema)

@@ -1,8 +1,12 @@
 defmodule EventStore.EventStoreTest do
   use EventStore.StorageCase
 
+  alias EventStore.Storage.Stream
+  alias EventStore.EventFactory.Event
   alias EventStore.{EventData, EventFactory, RecordedEvent, UUID}
   alias EventStore.Snapshots.SnapshotData
+  alias EventStore.Streams.DomainEvent
+  alias EventStore.Streams.StreamQuery
   alias TestEventStore, as: EventStore
 
   @all_stream "$all"
@@ -40,6 +44,61 @@ defmodule EventStore.EventStoreTest do
       events = EventFactory.create_events(3)
 
       assert :ok = EventStore.append_to_stream(stream_uuid, 0, events)
+    end
+
+    defmodule StudentEnrolled do
+      defstruct [:student_id, :course_id]
+    end
+
+    defmodule CourseLimitReached do
+      defstruct [:course_id]
+    end
+
+    test "should append to multiple streams" do
+      course_id = UUID.uuid4()
+      student_id = UUID.uuid4()
+
+      events = [
+        %DomainEvent{
+          event: %StudentEnrolled{student_id: student_id, course_id: course_id},
+          stream_uuids: [student_id, course_id]
+        },
+        %DomainEvent{
+          event: %CourseLimitReached{course_id: course_id},
+          stream_uuids: [course_id]
+        }
+      ]
+
+      stream_query = %StreamQuery{
+        stream_ids: [
+          course_id,
+          student_id
+        ],
+        event_types: [
+          StudentEnrolled,
+          CourseLimitReached
+        ]
+      }
+
+      assert :ok = EventStore.append_to_stream(stream_query, 0, events)
+    end
+
+    test "stream info from multiple streams" do
+      stream1 = "one-" <> UUID.uuid4()
+
+      events = EventFactory.create_events(2)
+      assert :ok = EventStore.append_to_stream(stream1, 0, events)
+
+      stream2 = "two-" <> UUID.uuid4()
+      events = EventFactory.create_events(2)
+      assert :ok = EventStore.append_to_stream(stream2, 0, events)
+
+      stream_query = %StreamQuery{
+        stream_ids: [stream1, stream2],
+        event_types: [Event]
+      }
+
+      {:ok, stream_info} = EventStore.stream_info(stream_query)
     end
 
     test "should fail attempting to append to `$all` stream" do

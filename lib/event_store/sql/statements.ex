@@ -26,6 +26,7 @@ defmodule EventStore.Sql.Statements do
         {:query_all_subscriptions, [:schema]},
         {:query_snapshot, [:schema]},
         {:query_stream_info, [:schema]},
+        {:query_stream_query, [:schema, :stream_query]},
         {:query_stream_events_backward, [:schema]},
         {:query_stream_events_forward, [:schema]},
         {:query_streams, [:schema, :sort_by, :sort_dir]},

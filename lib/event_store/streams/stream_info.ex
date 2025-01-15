@@ -16,6 +16,33 @@ defmodule EventStore.Streams.StreamInfo do
     %StreamInfo{stream_uuid: stream_uuid}
   end
 
+  def validate_expected_version(streams, expected_version) when is_list(streams) do
+    dbg(streams)
+
+    # version lets us know if there's a problem
+    # status checks for deleted....
+
+    # Are all the streams new?
+    new? = Enum.all?(streams, &(&1.stream_id == nil))
+
+    # Are any of the streams deleted?
+    deleted? = Enum.any?(streams, &(&1.status == :deleted))
+
+    # What is the highest stream version in the $all stream?
+    max_version =
+      Enum.max(streams, fn a, b ->
+        a.stream_version > b.stream_version
+      end)
+
+    representative_stream_info = %StreamInfo{
+      stream_id: if(new?, do: nil, else: :at_least_one_exists),
+      stream_version: max_version.stream_version,
+      status: if(deleted?, do: :deleted, else: nil)
+    }
+
+    validate_expected_version(representative_stream_info, expected_version)
+  end
+
   def validate_expected_version(%StreamInfo{} = stream, expected_version) do
     %StreamInfo{stream_id: stream_id, stream_version: stream_version, status: status} = stream
 
@@ -41,5 +68,8 @@ defmodule EventStore.Streams.StreamInfo do
       true ->
         {:error, :wrong_expected_version}
     end
+    |> tap(fn v ->
+      dbg(v)
+    end)
   end
 end

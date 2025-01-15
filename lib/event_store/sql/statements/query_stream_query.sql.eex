@@ -1,0 +1,34 @@
+<%
+
+  array =
+    stream_query.stream_ids
+    |> Enum.concat(["$all"])
+    |> Enum.with_index(1)
+    |> Enum.map(fn {_, index} -> "$#{index}" end)
+    |> Enum.join(",")
+
+  event_types =
+    stream_query.event_types
+    |> Enum.map(fn e -> "'#{e}'" end)
+    |> Enum.join(", ")
+
+%>
+SELECT
+  streams.stream_id,
+  streams.stream_uuid,
+  streams.stream_version,
+  streams.created_at,
+  streams.deleted_at
+FROM "<%= schema %>".streams as streams
+INNER JOIN "<%= schema %>".stream_events as stream_events
+ON stream_events.stream_id = streams.stream_id
+INNER JOIN "<%= schema %>".events as events
+ON events.event_id = stream_events.event_id
+WHERE streams.stream_uuid in (<%= array %>)
+AND events.event_type in (<%= event_types %>)
+GROUP BY
+  streams.stream_id,
+  streams.stream_uuid,
+  streams.stream_version,
+  streams.created_at,
+  streams.deleted_at
